@@ -39,7 +39,7 @@ showHelp(){
     # Show command's help
     cat << HELP
 ${s_bold}[Usage]${s_normal} 
-    $ ${s_success}gns <remote-link> ${COMMAND_NAME} [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
+    $ ${s_success}gns ${COMMAND_NAME} <remote-link> [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
         => Where remote-link is the link to the git repository
 
     ${s_bold}[General Options]${s_normal}

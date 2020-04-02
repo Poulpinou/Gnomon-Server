@@ -18,7 +18,7 @@ COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
 COMMAND_SHORT_OPTIONS="hvic:"
-COMMAND_LONG_OPTIONS="help,verbose,ignore,container"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,container:"
 
 # [----- LOAD CONFIG AND UTILITIES -----]
 . $ROOT_PATH/.gns-config
@@ -39,7 +39,7 @@ showHelp(){
     # Show command's help
     cat << HELP
 ${s_bold}[Usage]${s_normal} 
-    $ ${s_success}gns <repository-name> ${COMMAND_NAME} [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
+    $ ${s_success}gns ${COMMAND_NAME} <repository-name> [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
         => Where repository-name is the name of the repository you want to delete
 
     ${s_bold}[General Options]${s_normal}

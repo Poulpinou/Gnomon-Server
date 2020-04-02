@@ -125,7 +125,7 @@ cd $container_path || exit $?
 
 # [Create folder]
 ((verbose)) && logInfo "Creating folder..."
-mkdir -p $container_name || exit $?
+mkdir $container_name || exit $?
 ((verbose)) && logInfo "Folder $container_name successfully created"
 
 cd $container_name || exit $?
