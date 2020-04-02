@@ -1,0 +1,218 @@
+#!/bin/bash
+
+# [----- INITIALIZE VARIABLES -----]
+# [ Pathes ]
+# This script's absolute path
+SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+COMMANDS_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+# The path to infos templates
+TEMPLATES_PATH=$ROOT_PATH/templates/infos
+
+# [ Command ]
+# The name of this command
+COMMAND_NAME="${0##*/}"
+
+# Every possible options for this command
+COMMAND_SHORT_OPTIONS="hc:r:"
+COMMAND_LONG_OPTIONS="help,container:,repository:,list-containers,list-repositories,list-commands"
+
+
+# [----- SOURCE CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+. $ROOT_PATH/utilities/containers.sh
+
+
+# [----- SOURCE TEMPLATE -----]
+. $TEMPLATES_PATH/header.template
+. $TEMPLATES_PATH/container.template
+. $TEMPLATES_PATH/repository.template
+
+
+# [----- FUNCTIONS -----]
+# Displays the help for this command
+showHelp(){
+echo -e "${s_bold}[Description]${s_normal} \n"
+showDescription
+cat << HELP
+${s_bold}[Usage]${s_normal} 
+    $ ${s_success}gns ${COMMAND_NAME} [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
+
+    ${s_bold}[General Options]${s_normal}
+    -h --help               ${s_bold}Help :${s_normal} Displays command's help
+
+    ${s_bold}[Input Options]${s_normal}
+    -c --container [container]      ${s_bold}Container :${s_normal} Use this option to set a target container (enter its path)
+    -r --repository [repository]    ${s_bold}Repository :${s_normal} Use this option to set a target repository (enter its name)
+
+    ${s_bold}[List Options]${s_normal}
+    --list-containers       ${s_bold}List Containers :${s_normal} Displays every existing container infos
+    --list-repositories     ${s_bold}List Repositories :${s_normal} Displays every respositories infos from a container.
+                            Your active repository should be a Gnomon Container or provide it with the -c option
+    --list-commands         ${s_bold}List Commands :${s_normal} Displays every possible command for gns (same as gns -l)
+HELP
+}
+
+# Displays this command's description
+showDescription(){
+cat << DESCRIPTION
+${s_title}${COMMAND_NAME}${s_normal}
+    Use this to display usefull informations on your gnomon servers. Take a look at the help to see possible options
+
+DESCRIPTION
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Prepare options
+COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
+    || (
+        showHelp
+        exit 1
+    )
+eval set -- "$COMMAND_OPTIONS"
+
+# Set default values
+verbose=0
+list_containers=0
+list_repositories=0
+list_commands=0
+
+# Iterate on options
+while true; do
+    case "$1" in   
+    -h | --help) showHelp; exit 0; shift;;
+    --list-containers) list_containers=1; shift;;
+    --list-repositories) list_repositories=1; shift;;
+    --list-commands) list_commands=1; shift;;
+    -c | --container) input_container="$2"; shift 2;;
+    -r | --repository) input_repository="$2"; shift 2;;
+    --) shift; break;;    
+    *) echo "prout"; break;;
+    esac
+done
+
+
+# [----- EXECUTION -----]
+action_count=1
+
+# [Draw header]
+showHeader
+
+# [List containers]
+# Check if should list containers
+if [ $list_containers = 1 ]
+then
+    # Draw title
+    echo -e "\n${s_success}INFO #${action_count} : List Containers ${s_normal}"
+    action_count=$((action_count+1))
+
+    # List containers
+    for container in $(jq -c '.containers[]' $ROOT_PATH/data/containers.json)
+    do
+        # Draw container
+        showContainer $container
+    done
+fi
+
+
+# [Targeted container infos]
+# Check if a container has been targeted
+if [ ! -z $input_container ]
+then
+    # Draw title
+    echo -e "\n${s_success}INFO #${action_count} : Targeted Container Infos ${s_normal}"
+    action_count=$((action_count+1))
+
+    # Get Container datas        
+    container=$(jq -c --arg path "$input_container" '.containers[] | select(.path==$path)' $ROOT_PATH/data/containers.json)
+
+    if [ ! -z $container ]
+    then
+        # Draw container
+        showContainer $container
+
+        # Set active container
+        active_container=$(echo $container | jq -r '.path')
+    else
+        # Container not found
+        logWarning "No container data found for $input_container"
+    fi  
+fi
+
+
+# [Get active container]
+if [ -z $active_container ]
+then
+    active_container="$PWD"
+fi
+getGnomonfile $active_container
+
+# [List repositories]
+if [ $list_repositories = 1 ]   
+then
+    # Draw title
+    echo -e "\n${s_success}INFO #${action_count} : List Repositories ${s_normal}"
+    action_count=$((action_count+1))
+
+    # Check gnomon file
+    if [ -z $gnomonfile ]
+    then
+        logWarning "A valid Gnomon container is required to list repositories"
+    else
+        # List repositories
+        for repository_key in $(jq '.repositories | keys | .[]' $gnomonfile)
+        do
+            # Load repository data
+            repository_data=$(jq -rc ".repositories[$repository_key]" $gnomonfile)
+
+            # Draw repository
+            showRepository "$repository_data"
+        done
+    fi
+fi
+
+# [Targeted repository infos]
+# Check if a repository has been targeted
+if [ ! -z $input_repository ]
+then
+    # Draw title
+    echo -e "\n${s_success}INFO #${action_count} : Targeted Repository Infos ${s_normal}"
+    action_count=$((action_count+1))
+
+    # Check gnomon file
+    if [ -z $gnomonfile ]
+    then
+        logWarning "A valid Gnomon container is required to target a repository"
+    else
+        # Get repository datas        
+        repository_data=$(jq -c --arg name "$input_repository" '.repositories[] | select(.name==$name)' $gnomonfile)
+
+        # Check if some datas were find
+        if [ ! -z "$repository_data" ]
+        then
+            # Draw repository
+            showRepository "$repository_data"
+        else
+            # Repository not found
+            logWarning "No repository named $input_repository found in $active_container"
+        fi 
+    fi 
+fi
+
+# [List commands]
+if [ $list_commands = 1 ]
+then
+    # Draw title
+    echo -e "\n${s_success}INFO #${action_count} : List Commands ${s_normal}"
+    action_count=$((action_count+1))
+
+    # Exec list commands
+    gns -l
+fi   

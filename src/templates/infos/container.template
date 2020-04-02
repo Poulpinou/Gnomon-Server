@@ -1,0 +1,31 @@
+#!/bin/bash
+
+showContainer(){
+    # [----- VARIABLES -----]
+    local CONTAINER="$1"
+
+
+    # [----- PREPARE DATA -----]
+    local CONTAINER_PATH=$(echo "$CONTAINER" | jq -r '.path' )
+    nameFromPath $CONTAINER_PATH
+    local CONTAINER_NAME="$name_from_path"
+    
+    getGnomonfile $CONTAINER_PATH 2
+    [[ -z $gnomonfile ]] && return
+    local CONTAINER_VERSION=$(jq -r '.version' $gnomonfile)
+    local CONTAINER_SOB=$(jq '.startOnBoot' $gnomonfile)
+    local CONTAINER_UOS=$(jq '.updateOnStart' $gnomonfile)
+    local CONTAINER_REPOSITORY_COUNT=$(jq '.repositories | length' $gnomonfile)
+
+    
+    # [----- TEMPLATE -----]
+    cat << TEMPLATE
+
+    ${s_title}[ ▥ ${CONTAINER_NAME} ]${s_normal}
+    ${s_bold}Path :${s_normal} ${CONTAINER_PATH}
+    ${s_bold}Version :${s_normal} ${CONTAINER_VERSION}
+    ${s_bold}Start on boot :${s_normal} ${CONTAINER_SOB}
+    ${s_bold}Update on start :${s_normal} ${CONTAINER_UOS}
+    ${s_bold}Repository count :${s_normal} ${CONTAINER_REPOSITORY_COUNT}
+TEMPLATE
+}

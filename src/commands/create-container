@@ -1,0 +1,173 @@
+#!/bin/bash
+set -e
+
+# [----- INITIALIZE VARIABLES -----]
+# [ Pathes ]
+# This script's absolute path
+SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+COMMANDS_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+# [ Command ]
+# The name of this command
+COMMAND_NAME="${0##*/}"
+
+# Every possible options for this command
+COMMAND_OPTIONS="hvn:p:?"
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+
+
+# [----- FUNCTIONS -----]
+# Displays the help for this command
+showHelp(){
+showDescription
+cat << HELP
+Usage: 
+    ${s_success}$ gns ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+
+    ${s_bold}[General Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays command's help
+    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    
+    ${s_bold}[Input Options]${s_normal}
+    -n [name]        ${s_bold}Name :${s_normal} use this to enter the name of your repository
+    -p [path]        ${s_bold}Path :${s_normal} use this to enter the path of your repository (default: /home/${USER}/)
+HELP
+}
+
+# Displays this command's description
+showDescription(){
+cat << DESCRIPTION
+${s_title}${COMMAND_NAME}${s_normal}
+    Use this command to create a new container. A container can be started on boot and 
+    will contain your docker repositories. It automatically update them from their git 
+    remotes. 
+
+DESCRIPTION
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+verbose=0
+while getopts $COMMAND_OPTIONS arg; do
+    case $arg in
+    h)
+        showHelp
+        exit 0;
+        ;;
+    v)
+        verbose=1
+        logInfo "Verbose mode enabled"
+        ;;
+    n)
+        container_name="$OPTARG"
+        ;;
+    p)
+        container_path="$OPTARG"
+        ;;
+    ?)
+        showHelp
+        exit 1;
+    esac
+done
+
+
+# [----- EXECUTION -----]
+# [Get container's name]
+if [ -z $container_name ]
+then
+    ((verbose)) && logInfo "Read container's name"
+    read -p "Enter the container's name (default: gnomon-container): " container_name
+    if [ -z $container_name ]
+    then
+        container_name="gnomon-container"
+    fi
+fi
+((verbose)) && logInfo "Container's name set to $container_name"
+
+
+# [Get container's path]
+if [ -z $container_path ]
+then
+    ((verbose)) && logInfo "Read container's path"
+    read -p "Enter the container's path (default: $PWD): " container_path
+    if [ -z $container_path ]
+    then
+        container_path="$PWD"
+    fi
+fi
+((verbose)) && logInfo "Container's path set to $container_path"
+
+
+# [Check path]
+((verbose)) && logInfo "Checking path..."
+# Replace '~' by '/home/$USER'
+container_path=${container_path/[~]/"/home/${USER}"}
+
+# Check if directory exists
+[[ -d $container_path ]] || exitIfError $? "$container_path is not a valid path"
+((verbose)) && logInfo "Path is valid"
+
+cd $container_path || exit $?
+
+
+# [Create folder]
+((verbose)) && logInfo "Creating folder..."
+mkdir -p $container_name || exit $?
+((verbose)) && logInfo "Folder $container_name successfully created"
+
+cd $container_name || exit $?
+
+
+# [Create .gnomonfile]
+((verbose)) && logInfo "Creating .gnomonfile..."
+. $ROOT_PATH/templates/.gnomonfile.template > .gnomonfile || exit $?
+((verbose)) && logInfo ".gnomonfile successfully created"
+
+
+# [Add container to datas]
+((verbose)) && logInfo "Adding $container_name to container list..."
+full_path=$container_path/$container_name
+container_list=$ROOT_PATH/data/containers.json
+
+((verbose)) && logInfo "Checking if path exists in container list..."
+if jq -e --arg path "$full_path" '.containers | map(.path == $path) | any' $container_list > /dev/null
+then 
+    logWarning "$full_path already exist in container list"
+    ((verbose)) && logInfo "Addition canceled"
+else
+    ((verbose)) && logInfo "Path doesn't exist in container list"
+
+    # Create tmp file
+    tmp=$(mktemp /tmp/gns_container_list_XXXX.tmp)
+    cat $container_list >> $tmp
+
+    # Add new container
+    jq --arg path "$full_path" '.containers += [{"path":$path}]' $container_list > $tmp
+
+    # Apply tmp
+    mv -f $tmp $container_list
+    ((verbose)) && logInfo "$full_path added to container list"
+fi
+
+
+# [Show success & what's next]
+logSuccess "Gnomon Container successfully created!"
+cat << WHATNEXT
+
+Now you can :
+    $ ${s_success}cd ${container_path}/${container_name} ${s_normal}to access your container
+
+Then : 
+    $ ${s_success}gns add-repository ${s_normal} to add your first git repository
+WHATNEXT
+
+exit 0

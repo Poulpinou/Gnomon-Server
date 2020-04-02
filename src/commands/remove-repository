@@ -1,0 +1,152 @@
+#!/bin/bash
+set -e
+
+# [----- INITIALIZE VARIABLES -----]
+# [ Pathes ]
+# This script's absolute path
+SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+COMMANDS_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+# [ Command ]
+# The name of this command
+COMMAND_NAME="${0##*/}"
+
+# Every possible options for this command
+COMMAND_OPTIONS="hvig:?"
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+. $ROOT_PATH/utilities/containers.sh
+
+
+# [----- FUNCTIONS -----]
+# Displays the help for this command
+showHelp(){
+showDescription
+local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
+cat << HELP
+Usage: 
+    ${s_success}$ gns <repository-name> ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+        => Where repository-name is the name of the repository you want to delete
+
+    ${s_bold}[General Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays command's help
+    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -i               ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+
+    ${s_bold}[Input Options]${s_normal}
+    -g [container]   ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container (default: current directory)
+HELP
+}
+
+# Displays this command's description
+showDescription(){
+cat << DESCRIPTION
+${s_title}${COMMAND_NAME}${s_normal}
+    Use this command to remove a git repository from a Gnomon Container
+
+DESCRIPTION
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+[[ -n $1 ]] || exitIfError $? "This command requires a repository name or an option"
+
+if [[ ! $1 == -* ]]
+then
+    repository_name="$1"
+    shift
+fi
+
+verbose=0
+ignore=0
+container_path="$PWD"
+while getopts $COMMAND_OPTIONS arg; do
+    case $arg in
+    h)
+        showHelp
+        exit 0;
+        ;;
+    v)
+        verbose=1
+        logInfo "Verbose mode enabled"
+        ;;
+    i)
+        ignore=1
+        ;;
+    g)  
+        container_path="$OPTARG"
+        ;;
+    ?)
+        showHelp
+        exit 1;
+    esac
+done
+
+
+# [----- EXECUTION -----]
+# [Get gnomonfile]
+((verbose)) && logInfo "Getting the .gnomonfile..."
+getGnomonfile $container_path 1
+((verbose)) && logInfo ".gnomonfile loaded"
+
+# [Check if repository exists]
+((verbose)) && logInfo "Checking if repository exists..."
+jq -e --arg name "$repository_name" '.repositories | map(.name == $name) | any' $gnomonfile > /dev/null \
+    || exitIfError 1 "$repository_name doesn't exist in this container"
+((verbose)) && logInfo "$repository_name found"
+
+# [Ask validation]
+if ((ignore))  
+then
+    ((verbose)) && logInfo "Ignoring validation message"
+else
+    ((verbose)) && logInfo "Asking for validation"
+    while true
+    do
+        read -p "Are you sure you want to remove $repository_name from this container? (y/n)" yn
+        case $yn in
+        [Yy]* )
+            ((verbose)) && logInfo "Approved removal"
+            break;;
+        [Nn]* ) 
+            logWarning "Removal cancelled"
+            exit 0
+            ;;
+        * ) echo "Invalid input, please answer yes or no.";;
+    esac
+    done
+fi
+
+# [Remove repository]
+# Create tmp file
+tmp=$(mktemp /tmp/gns_gnomonfile_XXXX.tmp)
+cat $gnomonfile >> $tmp
+
+# Remove repository from gnomonfile
+((verbose)) && logInfo "Removing $repository_name from gnomonfile..."
+jq --arg name "$repository_name" 'del(.repositories[] | select(.name == $name))' $gnomonfile > $tmp
+
+# Apply tmp file
+mv -f $tmp $gnomonfile
+((verbose)) && logInfo "$repository_name removed from gnomonfile"
+
+
+# [Log success and what's next]
+logSuccess "$repository_name successfully removed from gnomonfile!"
+cat << WHATNEXT
+
+Now you can :
+    $ ${s_success}gns update ${s_normal}to update your container and remove the deleted repository from the container folder 
+    or
+    $ ${s_success}gns add-repository <remote> ${s_normal}to add a new repository
+WHATNEXT
+
+exit 0

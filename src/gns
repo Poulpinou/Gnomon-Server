@@ -1,0 +1,92 @@
+#!/bin/bash
+set -e
+
+# [----- DEFINE VARIABLES -----]
+ROOT_PATH=$(dirname "$0")       # This dev value will be replaced during install
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+
+
+# [----- FUNCTIONS -----]
+# Display the help for this command
+showHelp(){
+cat << HELP  
+Usage: 
+    ${s_success}$ gns [-hv]${s_normal}
+    ${s_bold}[Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays global help
+    -v               ${s_bold}Version :${s_normal} Displays the current version of Gnomon Server
+    -l               ${s_bold}List Commands :${s_normal} Displays every possible command for gns
+
+    ${s_success}$ gns <command> [-hv] [{commands-options}]${s_normal}
+    ${s_bold}[General Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays command's help
+    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+HELP
+}
+
+# Lists every possible commands for gnomon server
+listCommands(){
+    echo "${s_bold}[Available gns commands]${s_normal}"
+    echo
+
+    for cmd in $ROOT_PATH/commands/*; do
+        COMMAND_NAME="${cmd##*/}"
+        t=$(sed -n -e '1,/cat << DESCRIPTION/d;/DESCRIPTION/q;p' $cmd)
+        eval "echo \"$t\"";
+        echo 
+    done
+
+    echo "Use \"gns <command> -h\" to see usage"
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+# [ Check empty arguments ]
+if [ -z $1 ]
+then
+    logError "Some arguments or options are required for this command"
+    showHelp
+    exit 0;
+fi
+
+# [ Check if a command is passed ]
+if [[ ! $1 == -* ]]
+# [ A command has been provided ]
+then
+    # [ Extract command from arguments]   
+    command=$1
+    shift
+
+    # [ Check if command exists ]
+    [ -f $ROOT_PATH/commands/$command ] || exitIfError 1 "The \"$command\" command does not exist"   
+
+    # [ Execute command ]
+    bash $ROOT_PATH/commands/$command $@
+
+# [ No command provided ]  
+else    
+    while getopts "hvl?" arg; do
+        case $arg in
+        h)
+            showHelp
+            exit 0;
+            ;;
+        v)
+            logSuccess "Gnomon Server v$VERSION"
+            exit 0;
+            ;;
+        l)
+            listCommands
+            exit 0;
+            ;;
+        ?)
+            showHelp
+            exit 1;
+        esac
+    done
+fi
+

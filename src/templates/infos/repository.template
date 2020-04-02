@@ -1,0 +1,27 @@
+#!/bin/bash
+
+showRepository(){
+    # [----- VARIABLES -----]
+    local REPOSITORY=$1
+    local REPOSITORY_NAME=$(echo "$REPOSITORY" | jq -r '.name')
+    local REPOSITORY_GIT_REMOTE=$(echo "$REPOSITORY" | jq -r '.git.remote')
+
+    if git ls-remote $REPOSITORY_GIT_REMOTE -q &> /dev/null
+    then
+        REPOSITORY_GIT_REMOTE_STATUS="✓"
+    else
+        REPOSITORY_GIT_REMOTE_STATUS="✘"
+    fi
+
+    local REPOSITORY_CREATED_AT=$(echo "$REPOSITORY" | jq -r '.creationDate')
+    local REPOSITORY_UPDATED_AT=$(echo "$REPOSITORY" | jq -r '.updateDate')
+
+    # [----- TEMPLATE -----]
+    cat << TEMPLATE
+
+    ${s_title}[ ⇅ ${REPOSITORY_NAME} ]${s_normal}
+    ${s_bold}${REPOSITORY_GIT_REMOTE_STATUS} Git Remote : ${s_normal}${REPOSITORY_GIT_REMOTE}
+    ${s_bold}Created at : ${s_normal}${REPOSITORY_CREATED_AT}
+    ${s_bold}Last updated at : ${s_normal}${REPOSITORY_UPDATED_AT}
+TEMPLATE
+}

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+showHeader(){
+    # [----- TEMPLATE -----]
+    cat << TEMPLATE
+|--------------------- ${s_title}GNOMON SERVER INFOS${s_normal} ---------------------|
+|    ${s_bold}Version :${s_normal} ${VERSION}                                              |
+|    ${s_bold}Author :${s_normal} Donovan Persent                                   |
+|    ${s_bold}Email :${s_normal} donovan.persent@gmail.com                          |
+|---------------------------------------------------------------|
+TEMPLATE
+}

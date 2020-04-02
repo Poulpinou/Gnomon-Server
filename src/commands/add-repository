@@ -1,0 +1,176 @@
+#!/bin/bash
+set -e
+
+# [----- INITIALIZE VARIABLES -----]
+# [ Pathes ]
+# This script's absolute path
+SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+COMMANDS_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+# [ Command ]
+# The name of this command
+COMMAND_NAME="${0##*/}"
+
+# Every possible options for this command
+COMMAND_OPTIONS="hvig:n:c:?"
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+. $ROOT_PATH/utilities/containers.sh
+
+
+# [----- FUNCTIONS -----]
+# Displays the help for this command
+showHelp(){
+showDescription
+local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
+cat << HELP
+Usage: 
+    ${s_success}$ gns <remote-link> ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+        => Where remote-link is the link to the git repository
+
+    ${s_bold}[General Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays command's help
+    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -i               ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+
+    ${s_bold}[Input Options]${s_normal}
+    -g [container]   ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container (default: current directory)
+    -n [name]        ${s_bold}Name :${s_normal} You can give a custom name to the new repository. Two reposistories
+                     can have the same remote link, but can't have the same name.
+    -c [command]     ${s_bold}Command archetype :${s_normal} Sets the command archetype (default: docker-compose)
+                     You can add your own archetypes in ${ROOT_PATH}/templates/commands/<my-archetype>.json
+                     Available archtypes are : ${archetypes}
+HELP
+}
+
+# Displays this command's description
+showDescription(){
+cat << DESCRIPTION
+${s_title}${COMMAND_NAME}${s_normal}
+    Use this command to add a git repository to a Gnomon Container
+
+DESCRIPTION
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+[[ -n $1 ]] || exitIfError $? "This command requires a link to the git repository or an option"
+
+if [[ ! $1 == -* ]]
+then
+    repository_link="$1"
+    shift
+fi
+
+verbose=0
+ignore=0
+container_path="$PWD"
+while getopts $COMMAND_OPTIONS arg; do
+    case $arg in
+    h)
+        showHelp
+        exit 0;
+        ;;
+    v)
+        verbose=1
+        logInfo "Verbose mode enabled"
+        ;;
+    i)
+        ignore=1
+        ;;
+    g)  
+        container_path="$OPTARG"
+        ;;
+    n)
+        repository_name="$OPTARG"
+        ;;
+    c)
+        command="$OPTARG"
+        ;;
+    ?)
+        showHelp
+        exit 1;
+    esac
+done
+
+
+# [----- EXECUTION -----]
+# [Get gnomonfile]
+((verbose)) && logInfo "Getting the .gnomonfile..."
+getGnomonfile $container_path 1
+((verbose)) && logInfo ".gnomonfile loaded"
+
+
+# [Check repository link]
+((verbose)) && logInfo "Checking if a link has been provided..."
+[[ -n $repository_link ]] || exitIfError $? "This command requires a link to the git repository"
+((verbose)) && logInfo "Git remote set to : $repository_link"
+
+((verbose)) && logInfo "Checking if link is a valid git remote..."
+git ls-remote $repository_link -q || exitIfError $? "$repository_link is not a valid git repository"
+((verbose)) && logInfo "A git remote has been found"
+
+
+# [Get the name of the repository]
+if [ -z $repository_name]
+then
+    ((verbose)) && logInfo "Defining the repository name..."
+    # Get the name from the git link
+    nameFromPath $repository_link .git
+
+    # Ask user for a name
+    ((ignore)) || read -p "Enter the custom name of your repository (default : $name_from_path) : " repository_name
+    
+    # Set default value if no name inputed
+    [[ -z $repository_name ]] && repository_name=$name_from_path
+fi
+((verbose)) && logInfo "Repository name set to : $repository_name"
+
+# [Add repository to gnomonfile]
+# Check if name already exist
+((verbose)) && logInfo "Checking name availability..."
+jq -e --arg name "$repository_name" '.repositories | map(.name == $name) | any' $gnomonfile > /dev/null \
+    && exitIfError 1 "$repository_name already exist in this container"
+((verbose)) && logInfo "$repository_name is available"
+
+# Set default command archetype if not provided
+[[ -z $command ]] && command='docker-compose'
+((verbose)) && logInfo "Command archetype set to : $command"
+
+# Generate repo from template
+((verbose)) && logInfo "Generating repository from template..."
+. $ROOT_PATH/templates/repository.template $repository_name $repository_link $command
+((verbose)) && logInfo "Repository generated"
+
+# Create tmp file
+tmp=$(mktemp /tmp/gns_gnomonfile_XXXX.tmp)
+cat $gnomonfile >> $tmp
+
+# Add repository to gnomonfile
+((verbose)) && logInfo "Adding $repository_name to gnomonfile..."
+jq --argjson repo "$repo_template" '.repositories += [$repo]' $gnomonfile > $tmp
+
+# Apply tmp file
+mv -f $tmp $gnomonfile
+((verbose)) && logInfo "$repository_name added to gnomonfile"
+
+
+# [Log success and what's next]
+logSuccess "$repository_name successfully added to gnomonfile!"
+cat << WHATNEXT
+
+Now you can :
+    $ ${s_success}gns update ${s_normal}to update your container and download your repository 
+    or
+    $ ${s_success}gns start ${s_normal}to start your container and update it if enabled in .gnomonfile
+WHATNEXT
+
+exit 0

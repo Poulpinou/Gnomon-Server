@@ -1,0 +1,91 @@
+#!/bin/bash
+set -e
+
+# [----- INITIALIZE VARIABLES -----]
+# [ Pathes ]
+# This script's absolute path
+SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+COMMANDS_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+# [ Command ]
+# The name of this command
+COMMAND_NAME="${0##*/}"
+
+# Every possible options for this command
+COMMAND_OPTIONS="hv?"
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+. $ROOT_PATH/.gns-config
+. $ROOT_PATH/utilities/messages.sh
+. $ROOT_PATH/utilities/containers.sh
+
+
+# [----- FUNCTIONS -----]
+# Displays the help for this command
+showHelp(){
+showDescription
+cat << HELP
+Usage: 
+    ${s_success}$ gns ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+        => the container to start will be the active directory
+            or
+    ${s_success}$ gns ${COMMAND_NAME} <container-path> [-${COMMAND_OPTIONS/[?]}]${s_normal}
+        => provides the path to the container to start
+
+    ${s_bold}[General Options]${s_normal}
+    -h               ${s_bold}Help :${s_normal} Displays command's help
+    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+HELP
+}
+
+# Displays this command's description
+showDescription(){
+cat << DESCRIPTION
+${s_title}${COMMAND_NAME}${s_normal}
+    Use this command to start a Gnomon Container
+
+DESCRIPTION
+}
+
+
+# [----- LOAD ARGUMENTS AND OPTIONS -----]
+# [Get the container path]
+if [ -z $1 ] || [[ $1 == -* ]]
+then
+    container_path="$PWD"
+else
+    container_path="$1"
+    shift
+fi
+
+
+# [Extract options]
+verbose=0
+while getopts $COMMAND_OPTIONS arg; do
+    case $arg in
+    h)
+        showHelp
+        exit 0;
+        ;;
+    v)
+        verbose=1
+        logInfo "Verbose mode enabled"
+        ;;
+    ?)
+        showHelp
+        exit 1;
+    esac
+done
+
+
+# [----- EXECUTION -----]
+# [Get the gnomon file]
+getGnomonfile $container_path 1
+
+logSuccess "$COMMAND_NAME executed"

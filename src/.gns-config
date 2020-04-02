@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# [----- INFOS -----]
+APP_NAME="Gnomon Server"
+VERSION="0.1"
+
+
+# [----- BOOT -----]
+# If value=1, the containers will be run on start.
+# If disabled (value=0), containers won't start on 
+# boot even if it's enabled in their gnomonfile.
+START_ON_BOOT_ENABLED=1
+
+
+# [----- STYLES -----]
+s_normal=$(tput sgr0)
+s_bold=$(tput bold)
+s_error=$(tput setaf 7; tput setab 1)
+s_warning=$(tput setaf 3)
+s_success=$(tput setaf 2)
+s_info=$(tput dim)
+s_title=$(tput bold; tput setaf 3)

@@ -1,0 +1,6 @@
+/debian.old
+/builds
+
+src/data
+src/logs
+src/templates/dev

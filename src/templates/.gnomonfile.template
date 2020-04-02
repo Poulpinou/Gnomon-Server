@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# [----- VARIABLES -----]
+
+
+
+# [----- TEMPLATE -----]
+cat << TEMPLATE
+{
+    "version":"${VERSION}",
+    "startOnBoot":true,
+    "updateOnStart":true,
+    "repositories":[
+
+    ]
+}
+TEMPLATE

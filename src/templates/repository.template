@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# [----- INITIALIZE VARIABLES -----]
+# [Pathes]
+# This script's absolute path
+#SCRIPT_PATH=`realpath $0`
+
+# The absolute command's folder path
+#TEMPLATES_PATH=$(dirname $SCRIPT_PATH)
+
+# The absolute root folder path
+#ROOT_PATH=$(dirname $COMMANDS_PATH)
+
+
+# [Arguments]
+NAME=$1
+REMOTE=$2
+COMMANDS=$3
+DATE=$(date +'%x %X')
+
+
+# [----- LOAD CONFIG AND UTILITIES -----]
+#. $ROOT_PATH/utilities/messages.sh
+
+
+# [----- FUNCTIONS -----]
+getCommands(){
+    local file=$ROOT_PATH/templates/commands/$1.json
+    if [ -f $file ]
+    then
+        COMMANDS=$(cat $file)
+    else
+        logWarning "$COMMANDS command archetype doesn't exist, docker-compose set by default (you can add your own archetypes in $TEMPLATES_PATH/commands/your-archetype.json)"
+        getCommands 'docker-compose'
+    fi
+}
+
+
+# [----- PRE-RENDER -----]
+getCommands $COMMANDS
+
+
+# [----- TEMPLATE -----]
+repo_template=$(cat <<TEMPLATE
+{
+    "name":"${NAME}",
+    "creationDate":"${DATE}",
+    "git":{
+        "remote":"${REMOTE}"
+    },
+    "commands":${COMMANDS},
+    "ports-remap":[
+
+    ]
+}
+TEMPLATE
+)
