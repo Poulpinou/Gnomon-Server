@@ -12,8 +12,8 @@ getGnomonfile(){
 	else
 		gnomonfile=""
 		case $2 in
-			1) exitIfError 1 "$1 is not a Gnomon Repository" ;;
-			2) logWarning "$1 is not a Gnomon Repository"; return 1;;
+			1) exitIfError 1 "$1 is not a Gnomon Container" ;;
+			2) logWarning "$1 is not a Gnomon Container"; return 1;;
 			0|*);;
 		esac
 	fi 

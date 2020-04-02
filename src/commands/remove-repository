@@ -17,8 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_OPTIONS="hvig:?"
-
+COMMAND_SHORT_OPTIONS="hvic:"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,container:"
 
 # [----- LOAD CONFIG AND UTILITIES -----]
 . $ROOT_PATH/.gns-config
@@ -29,20 +29,26 @@ COMMAND_OPTIONS="hvig:?"
 # [----- FUNCTIONS -----]
 # Displays the help for this command
 showHelp(){
-showDescription
-local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
-cat << HELP
-Usage: 
-    ${s_success}$ gns <repository-name> ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+# Show command's description
+    echo -e "${s_bold}[Description]${s_normal} \n"
+    showDescription
+
+    # Load archetype names
+    local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
+
+    # Show command's help
+    cat << HELP
+${s_bold}[Usage]${s_normal} 
+    $ ${s_success}gns ${COMMAND_NAME} <repository-name> [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
         => Where repository-name is the name of the repository you want to delete
 
     ${s_bold}[General Options]${s_normal}
-    -h               ${s_bold}Help :${s_normal} Displays command's help
-    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
-    -i               ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+    -h --help       ${s_bold}Help :${s_normal} Displays command's help
+    -v --verbose    ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -i --ignore     ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
 
     ${s_bold}[Input Options]${s_normal}
-    -g [container]   ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container (default: current directory)
+    -c --container [container]  ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container path (default: current directory)
 HELP
 }
 
@@ -57,6 +63,7 @@ DESCRIPTION
 
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Get repository name
 [[ -n $1 ]] || exitIfError $? "This command requires a repository name or an option"
 
 if [[ ! $1 == -* ]]
@@ -65,28 +72,28 @@ then
     shift
 fi
 
+# Prepare options
+COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
+    || (
+        showHelp
+        exit 1
+    )
+eval set -- "$COMMAND_OPTIONS"
+
+# Set default values
 verbose=0
 ignore=0
 container_path="$PWD"
-while getopts $COMMAND_OPTIONS arg; do
-    case $arg in
-    h)
-        showHelp
-        exit 0;
-        ;;
-    v)
-        verbose=1
-        logInfo "Verbose mode enabled"
-        ;;
-    i)
-        ignore=1
-        ;;
-    g)  
-        container_path="$OPTARG"
-        ;;
-    ?)
-        showHelp
-        exit 1;
+
+# Iterate on options
+while true; do
+    case "$1" in 
+    -h | --help) showHelp; exit 0; shift;;
+    -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
+    -i | --ignore) ignore=1; shift;;
+    -c | --container) container_path="$2"; shift 2;;
+    --) shift; break;;    
+    *) break;;
     esac
 done
 

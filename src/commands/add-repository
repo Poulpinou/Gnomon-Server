@@ -17,8 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_OPTIONS="hvig:n:c:?"
-
+COMMAND_SHORT_OPTIONS="hvic:n:a:"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,container:,name:,command:"
 
 # [----- LOAD CONFIG AND UTILITIES -----]
 . $ROOT_PATH/.gns-config
@@ -29,25 +29,31 @@ COMMAND_OPTIONS="hvig:n:c:?"
 # [----- FUNCTIONS -----]
 # Displays the help for this command
 showHelp(){
-showDescription
-local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
-cat << HELP
-Usage: 
-    ${s_success}$ gns <remote-link> ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+    # Show command's description
+    echo -e "${s_bold}[Description]${s_normal} \n"
+    showDescription
+
+    # Load archetype names
+    local archetypes=$(ls $ROOT_PATH/templates/commands | xargs | sed 's/.json//g')
+
+    # Show command's help
+    cat << HELP
+${s_bold}[Usage]${s_normal} 
+    $ ${s_success}gns ${COMMAND_NAME} <remote-link> [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
         => Where remote-link is the link to the git repository
 
     ${s_bold}[General Options]${s_normal}
-    -h               ${s_bold}Help :${s_normal} Displays command's help
-    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
-    -i               ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+    -h --help        ${s_bold}Help :${s_normal} Displays command's help
+    -v --verbose     ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -i --ignore      ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
 
     ${s_bold}[Input Options]${s_normal}
-    -g [container]   ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container (default: current directory)
-    -n [name]        ${s_bold}Name :${s_normal} You can give a custom name to the new repository. Two reposistories
-                     can have the same remote link, but can't have the same name.
-    -c [command]     ${s_bold}Command archetype :${s_normal} Sets the command archetype (default: docker-compose)
-                     You can add your own archetypes in ${ROOT_PATH}/templates/commands/<my-archetype>.json
-                     Available archtypes are : ${archetypes}
+    -c --container [container-path]  ${s_bold}Container :${s_normal} Sets the targeted Gnomon Container (default: current directory)
+    -n --name [name]                 ${s_bold}Name :${s_normal} You can give a custom name to the new repository. Two reposistories
+                                     can have the same remote link, but can't have the same name.
+    -a --command [archetype-name]    ${s_bold}Command archetype :${s_normal} Sets the command archetype (default: docker-compose)
+                                     You can add your own archetypes in ${ROOT_PATH}/templates/commands/<my-archetype>.json
+                                     Available archtypes are : ${archetypes}
 HELP
 }
 
@@ -62,6 +68,7 @@ DESCRIPTION
 
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Get repository link
 [[ -n $1 ]] || exitIfError $? "This command requires a link to the git repository or an option"
 
 if [[ ! $1 == -* ]]
@@ -70,34 +77,30 @@ then
     shift
 fi
 
+# Prepare options
+COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
+    || (
+        showHelp
+        exit 1
+    )
+eval set -- "$COMMAND_OPTIONS"
+
+# Set default values
 verbose=0
 ignore=0
 container_path="$PWD"
-while getopts $COMMAND_OPTIONS arg; do
-    case $arg in
-    h)
-        showHelp
-        exit 0;
-        ;;
-    v)
-        verbose=1
-        logInfo "Verbose mode enabled"
-        ;;
-    i)
-        ignore=1
-        ;;
-    g)  
-        container_path="$OPTARG"
-        ;;
-    n)
-        repository_name="$OPTARG"
-        ;;
-    c)
-        command="$OPTARG"
-        ;;
-    ?)
-        showHelp
-        exit 1;
+
+# Iterate on options
+while true; do
+    case "$1" in  
+    -h | --help) showHelp; exit 0; shift;;
+    -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
+    -i | --ignore) ignore=1; shift;;
+    -c | --container) container_path="$2"; shift 2;;
+    -n | --name) repository_name="$2"; shift 2;;
+    -a | --command) command="$2"; shift 2;;
+    --) shift; break;;    
+    *) break;;
     esac
 done
 
@@ -120,7 +123,7 @@ git ls-remote $repository_link -q || exitIfError $? "$repository_link is not a v
 
 
 # [Get the name of the repository]
-if [ -z $repository_name]
+if [ -z $repository_name ]
 then
     ((verbose)) && logInfo "Defining the repository name..."
     # Get the name from the git link
