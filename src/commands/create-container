@@ -17,7 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_OPTIONS="hvn:p:?"
+COMMAND_SHORT_OPTIONS="hvn:p:"
+COMMAND_LONG_OPTIONS="help,verbose,name:,path:"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]
@@ -28,18 +29,22 @@ COMMAND_OPTIONS="hvn:p:?"
 # [----- FUNCTIONS -----]
 # Displays the help for this command
 showHelp(){
-showDescription
-cat << HELP
-Usage: 
-    ${s_success}$ gns ${COMMAND_NAME} [-${COMMAND_OPTIONS/[?]}]${s_normal}
+    # Show command's description
+    echo -e "${s_bold}[Description]${s_normal} \n"
+    showDescription
+
+    # Show command's help
+    cat << HELP
+${s_bold}[Usage]${s_normal} 
+    $ ${s_success}gns ${COMMAND_NAME} [-${COMMAND_SHORT_OPTIONS/[?]}] [--${COMMAND_LONG_OPTIONS//[,]/ --}]${s_normal}
 
     ${s_bold}[General Options]${s_normal}
-    -h               ${s_bold}Help :${s_normal} Displays command's help
-    -v               ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -h --help       ${s_bold}Help :${s_normal} Displays command's help
+    -v --verbose    ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
     
     ${s_bold}[Input Options]${s_normal}
-    -n [name]        ${s_bold}Name :${s_normal} use this to enter the name of your repository
-    -p [path]        ${s_bold}Path :${s_normal} use this to enter the path of your repository (default: /home/${USER}/)
+    -n --name [name]    ${s_bold}Name :${s_normal} use this to enter the name of your container
+    -p --path [path]    ${s_bold}Path :${s_normal} use this to enter your container target directory path (default: /home/${USER}/)
 HELP
 }
 
@@ -47,35 +52,34 @@ HELP
 showDescription(){
 cat << DESCRIPTION
 ${s_title}${COMMAND_NAME}${s_normal}
-    Use this command to create a new container. A container can be started on boot and 
-    will contain your docker repositories. It automatically update them from their git 
-    remotes. 
+    Use this command to create a new Gnomon Container. A container can be started on boot and 
+    will contain your git repositories. It automatically update them from their remotes. 
 
 DESCRIPTION
 }
 
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Prepare options
+COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
+    || (
+        showHelp
+        exit 1
+    )
+eval set -- "$COMMAND_OPTIONS"
+
+# Set default values
 verbose=0
-while getopts $COMMAND_OPTIONS arg; do
-    case $arg in
-    h)
-        showHelp
-        exit 0;
-        ;;
-    v)
-        verbose=1
-        logInfo "Verbose mode enabled"
-        ;;
-    n)
-        container_name="$OPTARG"
-        ;;
-    p)
-        container_path="$OPTARG"
-        ;;
-    ?)
-        showHelp
-        exit 1;
+
+# Iterate on options
+while true; do
+    case "$1" in  
+    -h | --help) showHelp; exit 0; shift;;
+    -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
+    -n | --name) container_name="$2"; shift 2;;
+    -p | --path) container_path="$2"; shift 2;;
+    --) shift; break;;    
+    *) break;;
     esac
 done
 

@@ -45,6 +45,7 @@ repo_template=$(cat <<TEMPLATE
 {
     "name":"${NAME}",
     "creationDate":"${DATE}",
+    "updateDate":"never",
     "git":{
         "remote":"${REMOTE}"
     },
