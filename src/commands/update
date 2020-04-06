@@ -139,14 +139,12 @@ updateRepository(){
             ((quiet)) || newStep "Pull Repository"
             (git pull \
                 && ((quiet)) || logSuccess "- Success : State Checked") \
-            || (logError "$?. Aborting" && return 1)
+            || exitIfError 1 "Aborting"
 
         elif [ $REMOTE = $BASE ]; then
-            logWarning "$name has local changed, push them or stash them. Aborting"
-            return 1
+            exitIfError 1 "$name has local changed, push them or stash them. Aborting"
         else
-            logError "$name diverged. Aborting"
-            return 1
+            exitIfError 1 "$name diverged. Aborting"
         fi
         
     else
@@ -154,7 +152,7 @@ updateRepository(){
 
         # Clone repository
         ((quiet)) || echo -e "${s_bold}Step $(step=$((step+1)) && echo $step) : ${s_normal} Clone repository"
-        git clone $remote:$branch $PWD/$name || (logWarning "Update aborted" || return)
+        git clone $remote -b $branch $PWD/$name || exitIfError 1 "Update aborted"
         ((quiet)) || logSuccess "- Success : $name directory created from $remote"
 
         # Change directory
