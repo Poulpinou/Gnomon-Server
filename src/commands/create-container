@@ -90,6 +90,7 @@ if [ -z $container_name ]
 then
     ((verbose)) && logInfo "Read container's name"
     read -p "Enter the container's name (default: gnomon-container): " container_name
+    container_name=${container_name// /_}
     if [ -z $container_name ]
     then
         container_name="gnomon-container"
