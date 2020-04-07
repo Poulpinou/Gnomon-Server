@@ -72,13 +72,25 @@ updateContainer(){
     # Get arguments
     local path=$1
 
-    # Get gnomonfile
-    getGnomonfile $path 2
-    [[ -z $gnomonfile ]] && logWarning "Update aborted" && return
-    ((verbose)) && logInfo "gnomonfile sucessfully loaded"
-
     # Start Update
-    ((quiet)) || echo -e "${s_title}[ ⟳ Start Updating $path ]${s_normal}"
+    ((quiet)) || echo -e "\n${s_title}=> ⟳ Start Updating $path <=${s_normal}"
+
+    # Get gnomonfile
+    if getGnomonfile $path 2
+    then
+        ((verbose)) && logInfo "gnomonfile sucessfully loaded"
+    else
+        read -p "Do you want to delete that container ? (y/n) : " yn
+        case $yn in 
+            [Yy]* ) 
+                echo -e "${s_title}TODO : create a gns remove-container command"
+            ;;
+            [Nn]* | *)
+                ((quiet)) || logWarning "Invalid container, update aborted"
+            ;;
+        esac
+        return 0
+    fi  
 
     # Load repositories
     for repository_key in $(jq '.repositories | keys | .[]' $gnomonfile)
@@ -104,9 +116,33 @@ updateRepository(){
     local name=$(echo "$datas" | jq -r '.name')
     local remote=$(echo "$datas" | jq -r '.git.remote')
     local branch=$(echo "$datas" | jq -r '.git.branch')
+    resetStep
 
     # Start Update
     ((quiet)) || echo -e "\n${s_title}[ Update Repository : $name ]${s_normal}"
+
+    # Check if remote is valid
+    ((quiet)) || newStep "Checking remote"
+    if git ls-remote $remote -q &> /dev/null
+    then
+        ((quiet)) || logSuccess "- Success : Remote is valid"
+    else
+        ((verbose)) && logInfo "Ask for deletion"
+        read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
+        case $yn in 
+            [Yy]*) 
+                ((verbose)) && logInfo "Deleting repository..."
+                gns remove-repository $name -i \
+                    && ( ((quiet)) || logSuccess "- Success : $name deleted" )
+
+                ;;
+            [Nn]* | *)
+                ((quiet)) || logWarning "- Aborting : invalid remote"
+             ;;
+        esac
+
+        return 0
+    fi      
 
     # Check if directory exists
     ((verbose)) && logInfo "Checking if $name directory exists..."
@@ -138,7 +174,7 @@ updateRepository(){
             ((quiet)) || logSuccess "- Success : State Checked"
             ((quiet)) || newStep "Pull Repository"
             (git pull \
-                && ((quiet)) || logSuccess "- Success : State Checked") \
+                && ((quiet)) || logSuccess "- Success : Repository Updated") \
             || exitIfError 1 "Aborting"
 
         elif [ $REMOTE = $BASE ]; then
