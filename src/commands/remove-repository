@@ -148,7 +148,7 @@ mv -f $tmp $gnomonfile
 
 # [Log success and what's next]
 logSuccess "$repository_name successfully removed from gnomonfile!"
-cat << WHATNEXT
+((ignore)) || cat << WHATNEXT
 
 Now you can :
     $ ${s_success}gns update ${s_normal}to update your container and remove the deleted repository from the container folder 

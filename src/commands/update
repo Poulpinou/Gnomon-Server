@@ -18,7 +18,7 @@ COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
 COMMAND_SHORT_OPTIONS="hviaq"
-COMMAND_LONG_OPTIONS="help,verbose,ignore,all,quiet"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,all,quiet,auto-remove"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]
@@ -50,8 +50,9 @@ ${s_bold}[Usage]${s_normal}
     -i --ignore      ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
 
     ${s_bold}[Specific Options]${s_normal}
-    -a --all    ${s_bold}Update all :${s_normal} If this option is provided, every Gnomon Container will be updated
-    -q --quiet  ${s_bold}Quiet mode :${s_normal} If provided, no message will be printed during update
+    -a --all        ${s_bold}Update all :${s_normal} If this option is provided, every Gnomon Container will be updated
+    -q --quiet      ${s_bold}Quiet mode :${s_normal} If provided, no message will be printed during update
+    --auto-remove   ${s_bold}Auto remove :${s_normal} will remove every invalid container and repository
 HELP
 }
 
@@ -80,7 +81,15 @@ updateContainer(){
     then
         ((verbose)) && logInfo "gnomonfile sucessfully loaded"
     else
-        read -p "Do you want to delete that container ? (y/n) : " yn
+        if ((auto_remove))
+        then
+            ((verbose)) && logInfo "Auto deletion applied"
+            yn='y'
+        else
+            ((verbose)) && logInfo "Ask for deletion"
+            read -p "Do you want to delete that container ? (y/n) : " yn
+        fi
+        
         case $yn in 
             [Yy]* ) 
                 echo -e "${s_title}TODO : create a gns remove-container command"
@@ -92,18 +101,21 @@ updateContainer(){
         return 0
     fi  
 
+    #Create a temp version for iteration (=> changing data breaks the loop)
+    gnomonfile_temp=`cat $gnomonfile`
+
     # Load repositories
-    for repository_key in $(jq '.repositories | keys | .[]' $gnomonfile)
+    for repository_key in $(echo "$gnomonfile_temp" | jq '.repositories | keys | .[]')
     do
         # Change directory
         cd $path
         ((verbose)) && logInfo "Directory changed to $PWD"
 
         # Load repository data
-        repository_data=$(jq -rc ".repositories[$repository_key]" $gnomonfile)
+        repository_data=$(echo "$gnomonfile_temp" | jq -rc ".repositories[$repository_key]")
 
         # Update repository
-        updateRepository "$repository_data"
+        updateRepository "$repository_data" || repository_key=$(($repository_key-1))
     done
 }
 
@@ -127,21 +139,26 @@ updateRepository(){
     then
         ((quiet)) || logSuccess "- Success : Remote is valid"
     else
-        ((verbose)) && logInfo "Ask for deletion"
-        read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
+        if ((auto_remove))
+        then
+            ((verbose)) && logInfo "Auto deletion applied"
+            yn='y'
+        else
+            ((verbose)) && logInfo "Ask for deletion"
+            read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
+        fi
         case $yn in 
             [Yy]*) 
                 ((verbose)) && logInfo "Deleting repository..."
                 gns remove-repository $name -i \
                     && ( ((quiet)) || logSuccess "- Success : $name deleted" )
-
                 ;;
             [Nn]* | *)
                 ((quiet)) || logWarning "- Aborting : invalid remote"
              ;;
         esac
 
-        return 0
+        return 1
     fi      
 
     # Check if directory exists
@@ -222,6 +239,7 @@ verbose=0
 ignore=0
 all=0
 quiet=0
+auto_remove=0
 
 # Iterate on options
 while true; do
@@ -230,7 +248,8 @@ while true; do
     -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
     -i | --ignore) ignore=1; shift;;
     -a | --all) all=1; shift;;
-    -q | --quiet) quiet=1 shift;;
+    -q | --quiet) quiet=1; shift;;
+    --auto-remove) auto_remove=1; shift;;
     --) shift; break;;    
     *) break;;
     esac
@@ -251,6 +270,3 @@ else
     ((verbose)) && logInfo "$container_path selected for update"
     updateContainer $container_path
 fi
-
-
-logSuccess "$COMMAND_NAME executed"
