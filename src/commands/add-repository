@@ -17,8 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_SHORT_OPTIONS="hvic:n:a:"
-COMMAND_LONG_OPTIONS="help,verbose,ignore,container:,name:,command:"
+COMMAND_SHORT_OPTIONS="hvic:n:a:b:"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,container:,name:,command:,branch:"
 
 # [----- LOAD CONFIG AND UTILITIES -----]
 . $ROOT_PATH/.gns-config
@@ -54,6 +54,7 @@ ${s_bold}[Usage]${s_normal}
     -a --command [archetype-name]    ${s_bold}Command archetype :${s_normal} Sets the command archetype (default: docker-compose)
                                      You can add your own archetypes in ${ROOT_PATH}/templates/commands/<my-archetype>.json
                                      Available archtypes are : ${archetypes}
+    -b --branch [branch]             ${s_bold}Branch :${s_normal} Set the branch to trach (default : master)
 HELP
 }
 
@@ -88,6 +89,7 @@ eval set -- "$COMMAND_OPTIONS"
 # Set default values
 verbose=0
 ignore=0
+branch=master
 container_path="$PWD"
 
 # Iterate on options
@@ -99,6 +101,7 @@ while true; do
     -c | --container) container_path="$2"; shift 2;;
     -n | --name) repository_name="$2"; shift 2;;
     -a | --command) command="$2"; shift 2;;
+    -b | --branch) branch="$2"; shift 2;;
     --) shift; break;;    
     *) break;;
     esac
@@ -137,6 +140,7 @@ then
 fi
 ((verbose)) && logInfo "Repository name set to : $repository_name"
 
+
 # [Add repository to gnomonfile]
 # Check if name already exist
 ((verbose)) && logInfo "Checking name availability..."
@@ -150,7 +154,7 @@ jq -e --arg name "$repository_name" '.repositories | map(.name == $name) | any' 
 
 # Generate repo from template
 ((verbose)) && logInfo "Generating repository from template..."
-. $ROOT_PATH/templates/repository.template $repository_name $repository_link $command
+. $ROOT_PATH/templates/repository.template $repository_name $repository_link $command $branch
 ((verbose)) && logInfo "Repository generated"
 
 # Create tmp file

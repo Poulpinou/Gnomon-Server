@@ -17,14 +17,15 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_SHORT_OPTIONS="hvi"
-COMMAND_LONG_OPTIONS="help,verbose,ignore"
+COMMAND_SHORT_OPTIONS="hviaq"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,all,quiet,auto-remove"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]
 . $ROOT_PATH/.gns-config
 . $ROOT_PATH/utilities/messages.sh
 . $ROOT_PATH/utilities/containers.sh
+. $ROOT_PATH/utilities/stepper.sh
 
 
 # [----- FUNCTIONS -----]
@@ -47,6 +48,11 @@ ${s_bold}[Usage]${s_normal}
     -h --help        ${s_bold}Help :${s_normal} Displays command's help
     -v --verbose     ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
     -i --ignore      ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+
+    ${s_bold}[Specific Options]${s_normal}
+    -a --all        ${s_bold}Update all :${s_normal} If this option is provided, every Gnomon Container will be updated
+    -q --quiet      ${s_bold}Quiet mode :${s_normal} If provided, no message will be printed during update
+    --auto-remove   ${s_bold}Auto remove :${s_normal} will remove every invalid container and repository
 HELP
 }
 
@@ -61,8 +67,165 @@ ${s_title}${COMMAND_NAME}${s_normal}
 DESCRIPTION
 }
 
+# Updates the provided container
+#   $1 (req) : container's path
+updateContainer(){
+    # Get arguments
+    local path=$1
+
+    # Start Update
+    ((quiet)) || echo -e "\n${s_title}=> ⟳ Start Updating $path <=${s_normal}"
+
+    # Get gnomonfile
+    if getGnomonfile $path 2
+    then
+        ((verbose)) && logInfo "gnomonfile sucessfully loaded"
+    else
+        if ((auto_remove))
+        then
+            ((verbose)) && logInfo "Auto deletion applied"
+            yn='y'
+        else
+            ((verbose)) && logInfo "Ask for deletion"
+            read -p "Do you want to delete that container ? (y/n) : " yn
+        fi
+        
+        case $yn in 
+            [Yy]* ) 
+                echo -e "${s_title}TODO : create a gns remove-container command"
+            ;;
+            [Nn]* | *)
+                ((quiet)) || logWarning "Invalid container, update aborted"
+            ;;
+        esac
+        return 0
+    fi  
+
+    #Create a temp version for iteration (=> changing data breaks the loop)
+    gnomonfile_temp=`cat $gnomonfile`
+
+    # Load repositories
+    for repository_key in $(echo "$gnomonfile_temp" | jq '.repositories | keys | .[]')
+    do
+        # Change directory
+        cd $path
+        ((verbose)) && logInfo "Directory changed to $PWD"
+
+        # Load repository data
+        repository_data=$(echo "$gnomonfile_temp" | jq -rc ".repositories[$repository_key]")
+
+        # Update repository
+        updateRepository "$repository_data" || repository_key=$(($repository_key-1))
+    done
+}
+
+# Updates the provided repository
+#   $1 (req) : repository's datas
+updateRepository(){
+    # Get arguments
+    local datas=$1
+    local step=0
+    local name=$(echo "$datas" | jq -r '.name')
+    local remote=$(echo "$datas" | jq -r '.git.remote')
+    local branch=$(echo "$datas" | jq -r '.git.branch')
+    resetStep
+
+    # Start Update
+    ((quiet)) || echo -e "\n${s_title}[ Update Repository : $name ]${s_normal}"
+
+    # Check if remote is valid
+    ((quiet)) || newStep "Checking remote"
+    if git ls-remote $remote -q &> /dev/null
+    then
+        ((quiet)) || logSuccess "- Success : Remote is valid"
+    else
+        if ((auto_remove))
+        then
+            ((verbose)) && logInfo "Auto deletion applied"
+            yn='y'
+        else
+            ((verbose)) && logInfo "Ask for deletion"
+            read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
+        fi
+        case $yn in 
+            [Yy]*) 
+                ((verbose)) && logInfo "Deleting repository..."
+                gns remove-repository $name -i \
+                    && ( ((quiet)) || logSuccess "- Success : $name deleted" )
+                ;;
+            [Nn]* | *)
+                ((quiet)) || logWarning "- Aborting : invalid remote"
+             ;;
+        esac
+
+        return 1
+    fi      
+
+    # Check if directory exists
+    ((verbose)) && logInfo "Checking if $name directory exists..."
+    if [ -d $name ]
+    then
+        ((verbose)) && logInfo "$name directory found"
+
+        # Change directory
+        cd $name
+        ((verbose)) && logInfo "Directory changed to $PWD"
+
+        # Update remote
+        ((quiet)) || newStep "Updating remote"
+        git remote update ||  (logWarning "Update aborted" && return)
+        ((quiet)) || logSuccess "- Success : Remote updated"
+
+        # Check state
+        ((quiet)) || newStep "Check state"
+        UPSTREAM=${origin:-'@{u}'}
+        LOCAL=$(git rev-parse @)
+        REMOTE=$(git rev-parse "$UPSTREAM")
+        BASE=$(git merge-base @ "$UPSTREAM")
+
+        if [ $LOCAL = $REMOTE ]; then
+            echo "$name is up to date"
+            ((quiet)) || logSuccess "- Success : State Checked"
+        elif [ $LOCAL = $BASE ]; then
+            echo "$name can be updated"
+            ((quiet)) || logSuccess "- Success : State Checked"
+            ((quiet)) || newStep "Pull Repository"
+            (git pull \
+                && ((quiet)) || logSuccess "- Success : Repository Updated") \
+            || exitIfError 1 "Aborting"
+
+        elif [ $REMOTE = $BASE ]; then
+            exitIfError 1 "$name has local changed, push them or stash them. Aborting"
+        else
+            exitIfError 1 "$name diverged. Aborting"
+        fi
+        
+    else
+        ((verbose)) && logInfo "$name directory not found"
+
+        # Clone repository
+        ((quiet)) || echo -e "${s_bold}Step $(step=$((step+1)) && echo $step) : ${s_normal} Clone repository"
+        git clone $remote -b $branch $PWD/$name || exitIfError 1 "Update aborted"
+        ((quiet)) || logSuccess "- Success : $name directory created from $remote"
+
+        # Change directory
+        cd $name
+        ((verbose)) && logInfo "Directory changed to $PWD"
+    fi 
+}
+
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Get the container path
+if [ -z $1 ] || [[ $1 == -* ]]
+then
+    container_path="$PWD"
+else
+    container_path="$1"
+    shift
+fi
+container_path=${container_path/[~]/"/home/${USER}"}
+
 # Prepare options
 COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
     || (
@@ -74,6 +237,9 @@ eval set -- "$COMMAND_OPTIONS"
 # Set default values
 verbose=0
 ignore=0
+all=0
+quiet=0
+auto_remove=0
 
 # Iterate on options
 while true; do
@@ -81,6 +247,9 @@ while true; do
     -h | --help) showHelp; exit 0; shift;;
     -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
     -i | --ignore) ignore=1; shift;;
+    -a | --all) all=1; shift;;
+    -q | --quiet) quiet=1; shift;;
+    --auto-remove) auto_remove=1; shift;;
     --) shift; break;;    
     *) break;;
     esac
@@ -88,6 +257,16 @@ done
 
 
 # [----- EXECUTION -----]
-# [Get the gnomon file]
-getGnomonfile $container_path 1
-logSuccess "$COMMAND_NAME executed"
+
+# [Check containers to update]
+if [ $all = 1 ]
+then
+    ((verbose)) && logInfo "Updating all containers..."
+    for container in $(jq -rc '.containers[].path' $ROOT_PATH/data/containers.json)
+    do
+        updateContainer $container
+    done
+else
+    ((verbose)) && logInfo "$container_path selected for update"
+    updateContainer $container_path
+fi
