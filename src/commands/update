@@ -17,8 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_SHORT_OPTIONS="hvaq"
-COMMAND_LONG_OPTIONS="help,verbose,all,quiet,auto-remove"
+COMMAND_SHORT_OPTIONS="hviaq"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,all,quiet,auto-remove"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]
@@ -47,6 +47,7 @@ ${s_bold}[Usage]${s_normal}
     ${s_bold}[General Options]${s_normal}
     -h --help        ${s_bold}Help :${s_normal} Displays command's help
     -v --verbose     ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
+    -i --ignore      ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
 
     ${s_bold}[Specific Options]${s_normal}
     -a --all        ${s_bold}Update all :${s_normal} If this option is provided, every Gnomon Container will be updated
@@ -84,6 +85,9 @@ updateContainer(){
         then
             ((verbose)) && logInfo "Auto deletion applied"
             yn='y'
+        then
+            ((verbose)) && logInfo "Ignoring: answer set to 'no'"
+            yn='n'
         else
             ((verbose)) && logInfo "Ask for deletion"
             read -p "Do you want to delete that container ? (y/n) : " yn
@@ -142,6 +146,10 @@ updateRepository(){
         then
             ((verbose)) && logInfo "Auto deletion applied"
             yn='y'
+        elif ((ignore))
+        then
+            ((verbose)) && logInfo "Ignoring: answer set to 'no'"
+            yn='n'
         else
             ((verbose)) && logInfo "Ask for deletion"
             read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
@@ -167,7 +175,7 @@ updateRepository(){
         ((verbose)) && logInfo "$name directory found"
 
         # Change directory
-        cd $name
+        cd $name  || return 1
         ((verbose)) && logInfo "Directory changed to $PWD"
 
         # Update remote
@@ -235,6 +243,7 @@ eval set -- "$COMMAND_OPTIONS"
 
 # Set default values
 verbose=0
+ignore=0
 all=0
 quiet=0
 auto_remove=0
@@ -244,6 +253,7 @@ while true; do
     case "$1" in  
     -h | --help) showHelp; exit 0; shift;;
     -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
+    -i | --ignore) ignore=1; shift;;
     -a | --all) all=1; shift;;
     -q | --quiet) quiet=1; shift;;
     --auto-remove) auto_remove=1; shift;;
@@ -267,3 +277,5 @@ else
     ((verbose)) && logInfo "$container_path selected for update"
     updateContainer $container_path
 fi
+
+exit 0

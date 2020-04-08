@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # [----- INITIALIZE VARIABLES -----]
 # [ Pathes ]
@@ -88,8 +87,9 @@ startContainer(){
         local options='-'
         ((verbose)) && options+='v'
         ((quiet)) && options+='q'
+        ((ignore)) && options+='i'
 
-        gns update $path $options
+        gns update $path $options && ((verbose)) && logInfo "Update done."
     else
         ((verbose)) && logInfo "Update on start disabled for this container. Update skipped."
     fi
@@ -104,7 +104,7 @@ startContainer(){
         # Load repository data
         repository_data=$(echo "$gnomonfile_temp" | jq -rc ".repositories[$repository_key]")
 
-        # Update repository
+        # Start repository
         startRepository "$repository_data" 
     done
 }
@@ -114,6 +114,25 @@ startContainer(){
 startRepository(){
     # Get arguments
     local datas=$1
+    local name=$(echo "$datas" | jq -r '.name')
+    local start_command=$(echo "$datas" | jq -r '.commands.start')
+
+    # Start repository
+    ((quiet)) || echo -e "\n${s_title}[ Start Repository : $name ]${s_normal}"
+
+    # Change directory
+    cd $name || return 1
+    ((verbose)) && logInfo "Directory changed to $PWD"
+
+    # Check command
+    ((verbose)) && logInfo "Checking start command..."
+    [[ -z $start_command ]] && (logError "No start command found for $name repository. Aborted." && return 1)
+    ((verbose)) && logInfo "Command provided"
+
+    # Execute command
+    eval $start_command || ( logError "Start command '$start_command' failed for $name. Aborting." && return 1)
+
+    return 0
 }
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
