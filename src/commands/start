@@ -16,8 +16,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_SHORT_OPTIONS="hvian"
-COMMAND_LONG_OPTIONS="help,verbose,ignore,all,no-update"
+COMMAND_SHORT_OPTIONS="hvianq"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,all,no-update,quiet"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]

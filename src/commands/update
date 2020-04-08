@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # [----- INITIALIZE VARIABLES -----]
 # [ Pathes ]
@@ -85,6 +84,7 @@ updateContainer(){
         then
             ((verbose)) && logInfo "Auto deletion applied"
             yn='y'
+        elif ((ignore))
         then
             ((verbose)) && logInfo "Ignoring: answer set to 'no'"
             yn='n'
@@ -185,10 +185,10 @@ updateRepository(){
 
         # Check state
         ((quiet)) || newStep "Check state"
-        UPSTREAM=${origin:-'@{u}'}
-        LOCAL=$(git rev-parse @)
-        REMOTE=$(git rev-parse "$UPSTREAM")
-        BASE=$(git merge-base @ "$UPSTREAM")
+        local UPSTREAM=${origin:-'@{u}'}
+        local LOCAL=$(git rev-parse @)
+        local REMOTE=$(git rev-parse "$UPSTREAM")
+        local BASE=$(git merge-base @ "$UPSTREAM")
 
         if [ $LOCAL = $REMOTE ]; then
             echo "$name is up to date"
@@ -218,7 +218,27 @@ updateRepository(){
         # Change directory
         cd $name
         ((verbose)) && logInfo "Directory changed to $PWD"
-    fi 
+    fi
+
+    # Post update
+    local pu_command=$(echo "$datas" | jq -r '.commands.postUpdate')
+
+    # Check a post update command exists
+    ((verbose)) && logInfo "Checking for postUpdate command"
+
+    if [ -z "$pu_command" ] || [[ $pu_command == null ]]
+    then
+        ((verbose)) && logInfo "No postUpdate command found"
+    else
+        ((verbose)) && logInfo "PostUpdate command found"
+
+        # Execute post-update command
+        ((quiet)) || newStep "Execute postUpdate command"
+        eval $pu_command || ( logError "PostUpdate command '$pu_command' failed for $name. Aborting." && return 1)
+        ((quiet)) || logSuccess "- Success : postUpdate command executed"
+    fi
+
+    return 0
 }
 
 
