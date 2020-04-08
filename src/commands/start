@@ -17,8 +17,8 @@ ROOT_PATH=$(dirname $COMMANDS_PATH)
 COMMAND_NAME="${0##*/}"
 
 # Every possible options for this command
-COMMAND_SHORT_OPTIONS="hvi"
-COMMAND_LONG_OPTIONS="help,verbose,ignore"
+COMMAND_SHORT_OPTIONS="hvian"
+COMMAND_LONG_OPTIONS="help,verbose,ignore,all,no-update"
 
 
 # [----- LOAD CONFIG AND UTILITIES -----]
@@ -47,6 +47,11 @@ ${s_bold}[Usage]${s_normal}
     -h --help        ${s_bold}Help :${s_normal} Displays command's help
     -v --verbose     ${s_bold}Verbose Mode :${s_normal} Enables verbose mode. More detailed logs will be displayed.
     -i --ignore      ${s_bold}Ignore :${s_normal} Ignores every question and gives default answer
+
+    ${s_bold}[Specific Options]${s_normal}
+    -a --all        ${s_bold}All :${s_normal} If this option is provided, every Gnomon Container will be started
+    -n --no-update  ${s_bold}No Update :${s_normal} If this option is provided, no update will be done, in any case
+    -q --quiet      ${s_bold}Quiet mode :${s_normal} If provided, no message will be printed during update
 HELP
 }
 
@@ -59,8 +64,69 @@ ${s_title}${COMMAND_NAME}${s_normal}
 DESCRIPTION
 }
 
+# Starts the provided container
+#   $1 (req) : container's path
+startContainer(){
+    # Get arguments
+    local path=$1
+
+    # Start container
+    ((quiet)) || echo -e "\n${s_title}=> ⤷ Starting $path <=${s_normal}"
+    
+    # Get gnomonfile
+    getGnomonfile $path 2 || (logWarning "Aborting..." && return 1)
+    ((verbose)) && logInfo "gnomonfile sucessfully loaded"
+
+    #Create a temp version for iteration (=> changing data breaks the loop)
+    gnomonfile_temp=`cat $gnomonfile`
+
+    #Check for updates
+    ((verbose)) && logInfo "Checking if container should update..."
+    if [[ $(jq '.updateOnStart' $gnomonfile) == true ]]
+    then
+        ((verbose)) && logInfo "Update on start enabled, start updating container"
+        local options='-'
+        ((verbose)) && options+='v'
+        ((quiet)) && options+='q'
+
+        gns update $path $options
+    else
+        ((verbose)) && logInfo "Update on start disabled for this container. Update skipped."
+    fi
+
+    # Load repositories
+    for repository_key in $(echo "$gnomonfile_temp" | jq '.repositories | keys | .[]')
+    do
+        # Change directory
+        cd $path
+        ((verbose)) && logInfo "Directory changed to $PWD"
+
+        # Load repository data
+        repository_data=$(echo "$gnomonfile_temp" | jq -rc ".repositories[$repository_key]")
+
+        # Update repository
+        startRepository "$repository_data" 
+    done
+}
+
+# Starts the provided repository
+#   $1 (req) : repository's datas
+startRepository(){
+    # Get arguments
+    local datas=$1
+}
 
 # [----- LOAD ARGUMENTS AND OPTIONS -----]
+# Get the container path
+if [ -z $1 ] || [[ $1 == -* ]]
+then
+    container_path="$PWD"
+else
+    container_path="$1"
+    shift
+fi
+container_path=${container_path/[~]/"/home/${USER}"}
+
 # Prepare options
 COMMAND_OPTIONS=`getopt -o $COMMAND_SHORT_OPTIONS --long $COMMAND_LONG_OPTIONS -n 'javawrap' -- "$@"` \
     || (
@@ -72,6 +138,9 @@ eval set -- "$COMMAND_OPTIONS"
 # Set default values
 verbose=0
 ignore=0
+all=0
+no_update=0
+quiet=0
 
 # Iterate on options
 while true; do
@@ -79,6 +148,9 @@ while true; do
     -h | --help) showHelp; exit 0; shift;;
     -v | --verbose) verbose=1; logInfo "Verbose mode enabled"; shift;;
     -i | --ignore) ignore=1; shift;;
+    -a | --all) all=1; shift;;
+    -n | --no-update) no_update=1; shift;;
+    -q | --quiet) quiet=1; shift;;
     --) shift; break;;    
     *) break;;
     esac
@@ -86,6 +158,15 @@ done
 
 
 # [----- EXECUTION -----]
-# [Get the gnomon file]
-getGnomonfile $container_path 1
-logSuccess "$COMMAND_NAME executed"
+# [Check if 'all' has been provided]
+if [ $all = 1 ]
+then
+    ((verbose)) && logInfo "Starting all containers..."
+    for container in $(jq -rc '.containers[].path' $ROOT_PATH/data/containers.json)
+    do
+        startContainer $container
+    done
+else
+    ((verbose)) && logInfo "$container_path is starting..."
+    startContainer $container_path
+fi
