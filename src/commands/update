@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # [----- INITIALIZE VARIABLES -----]
 # [ Pathes ]
@@ -85,6 +84,10 @@ updateContainer(){
         then
             ((verbose)) && logInfo "Auto deletion applied"
             yn='y'
+        elif ((ignore))
+        then
+            ((verbose)) && logInfo "Ignoring: answer set to 'no'"
+            yn='n'
         else
             ((verbose)) && logInfo "Ask for deletion"
             read -p "Do you want to delete that container ? (y/n) : " yn
@@ -105,7 +108,7 @@ updateContainer(){
     gnomonfile_temp=`cat $gnomonfile`
 
     # Load repositories
-    for repository_key in $(echo "$gnomonfile_temp" | jq '.repositories | keys | .[]')
+    for repository_key in $(echo "$gnomonfile_temp" | jq '.repositories | keys | .[]') 
     do
         # Change directory
         cd $path
@@ -115,7 +118,7 @@ updateContainer(){
         repository_data=$(echo "$gnomonfile_temp" | jq -rc ".repositories[$repository_key]")
 
         # Update repository
-        updateRepository "$repository_data" || repository_key=$(($repository_key-1))
+        updateRepository "$repository_data"
     done
 }
 
@@ -143,6 +146,10 @@ updateRepository(){
         then
             ((verbose)) && logInfo "Auto deletion applied"
             yn='y'
+        elif ((ignore))
+        then
+            ((verbose)) && logInfo "Ignoring: answer set to 'no'"
+            yn='n'
         else
             ((verbose)) && logInfo "Ask for deletion"
             read -p "$name has an invalid remote ($remote). Do you want to delete this repository? (y/n) : " yn
@@ -168,7 +175,7 @@ updateRepository(){
         ((verbose)) && logInfo "$name directory found"
 
         # Change directory
-        cd $name
+        cd $name  || return 1
         ((verbose)) && logInfo "Directory changed to $PWD"
 
         # Update remote
@@ -178,10 +185,10 @@ updateRepository(){
 
         # Check state
         ((quiet)) || newStep "Check state"
-        UPSTREAM=${origin:-'@{u}'}
-        LOCAL=$(git rev-parse @)
-        REMOTE=$(git rev-parse "$UPSTREAM")
-        BASE=$(git merge-base @ "$UPSTREAM")
+        local UPSTREAM=${origin:-'@{u}'}
+        local LOCAL=$(git rev-parse @)
+        local REMOTE=$(git rev-parse "$UPSTREAM")
+        local BASE=$(git merge-base @ "$UPSTREAM")
 
         if [ $LOCAL = $REMOTE ]; then
             echo "$name is up to date"
@@ -211,7 +218,27 @@ updateRepository(){
         # Change directory
         cd $name
         ((verbose)) && logInfo "Directory changed to $PWD"
-    fi 
+    fi
+
+    # Post update
+    local pu_command=$(echo "$datas" | jq -r '.commands.postUpdate')
+
+    # Check a post update command exists
+    ((verbose)) && logInfo "Checking for postUpdate command"
+
+    if [ -z "$pu_command" ] || [[ $pu_command == null ]]
+    then
+        ((verbose)) && logInfo "No postUpdate command found"
+    else
+        ((verbose)) && logInfo "PostUpdate command found"
+
+        # Execute post-update command
+        ((quiet)) || newStep "Execute postUpdate command"
+        eval $pu_command || ( logError "PostUpdate command '$pu_command' failed for $name. Aborting." && return 1)
+        ((quiet)) || logSuccess "- Success : postUpdate command executed"
+    fi
+
+    return 0
 }
 
 
@@ -270,3 +297,5 @@ else
     ((verbose)) && logInfo "$container_path selected for update"
     updateContainer $container_path
 fi
+
+exit 0

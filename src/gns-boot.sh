@@ -40,9 +40,6 @@ do
     # Check if start on boot is enabled for container
     [[ $(jq '.startOnBoot' $gnomonfile) == true ]] || continue
 
-    # Check if container should be updated on start (TODO: put it in gns start)
-    [[ $(jq '.updateOnStart' $gnomonfile) == true ]] && gns update $container_path || continue
-
     # Starts the container
     gns start $container_path
 done

@@ -4,3 +4,4 @@
 src/data
 src/logs
 src/templates/dev
+src/templates/commands/test.json
