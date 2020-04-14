@@ -4,7 +4,7 @@ rootPath = $(DESTDIR)$(prefix)/gnomon-server
 binPath = $(DESTDIR)/usr/bin
 
 # [----- DEPENDENCIES -----]
-dependencies = docker docker-compose jq git
+dependencies = jq git
 K := $(foreach exec,$(dependencies),\
         $(if $(shell which $(exec)),\
 		$(exec) found,\
