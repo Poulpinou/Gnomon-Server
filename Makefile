@@ -1,6 +1,7 @@
 # [----- PATHES -----]
-prefix = $(HOME)
-rootPath = $(DESTDIR)$(prefix)/.gnomon-server
+prefix = /usr/local
+rootPath = $(DESTDIR)$(prefix)/gnomon-server
+binPath = $(DESTDIR)/usr/bin
 
 # [----- DEPENDENCIES -----]
 dependencies = docker docker-compose jq git
@@ -9,6 +10,12 @@ K := $(foreach exec,$(dependencies),\
 		$(exec) found,\
 		$(error Gnomon-Servers requires $(exec) to work, please install it) \
 	))
+
+# [----- CHECKS -----]
+fakeroot_key := $(FAKEROOTKEY)
+
+# Check rc.local
+rc_local := $(cat /etc/rc.local | grep '$(rootPath)/gns-boot.sh')
 
 # [----- PROGRESS DISPLAY -----]
 ifneq ($(words $(MAKECMDGOALS)),1)
@@ -29,41 +36,55 @@ endif
 # [----- TARGETS -----]
 all: install
 
-install: check-dep do-install
+fakeroot:
+	@$(ECHO) Faking root
+ifeq ("$(fakeroot_key)","")
+	fakeroot $(DESTDIR)
+endif
+	@$(ECHO) Fakeroot done
 
-check-dep:
-	@$(ECHO) Checking dependencies...
-	@$(ECHO) Dependencies are valid
-
-do-install: check-dep
+install: fakeroot
 	@$(ECHO) Installing Gnomon Server...
 
 	@$(ECHO) Create root path
-	@mkdir -p $(rootPath)
+	@sudo mkdir -p $(rootPath)
 
 	@$(ECHO) Create configs	
-	@cp src/.gns-config $(rootPath) \
+	@sudo cp src/.gns-config $(rootPath) \
 		&& cp src/.gns-config $(rootPath)/.gns-config.default
 
 	@$(ECHO) Copy directories
-	@cp -r src/templates $(rootPath) \
+	@sudo cp -r src/templates $(rootPath) \
 		&& cp -r src/commands $(rootPath) \
-		&& cp -r src/utilities $(rootPath) \
+		&& cp -r src/utilities $(rootPath) 
 
 	@$(ECHO) Make data folder
-	@mkdir -p $(rootPath)/data 
+	@sudo mkdir -p $(rootPath)/data 
 
 	@test -f $(rootPath)/data/containers.json \
-		|| cp src/templates/containers.json.template $(rootPath)/data/containers.json
+		|| sudo cp src/templates/containers.json.template $(rootPath)/data/containers.json
 
 	@$(ECHO) Make logs folder
-	@mkdir -p $(rootPath)/logs
+	@sudo mkdir -p $(rootPath)/logs
 
 	@$(ECHO) Create gns command
-	@mkdir -p $(DESTDIR)$(prefix)/bin \
-		&& cp src/gns $(DESTDIR)$(prefix)/bin/gns \
-		&& sed -i 's:ROOT_PATH=.*:ROOT_PATH=$(rootPath):g' $(DESTDIR)$(prefix)/bin/gns \
-		&& chmod +x $(DESTDIR)$(prefix)/bin/gns
+	@sudo mkdir -p $(binPath) \
+		&& cp src/gns $(binPath)/gns \
+		&& sed -i 's:ROOT_PATH=.*:ROOT_PATH=$(rootPath):g' $(binPath)/gns \
+		&& chmod +x $(binPath)/gns
+
+	@$(ECHO) Add start on boot file
+	@sudo cp src/gns-boot.sh $(rootPath)
+
+	@$(ECHO) Modify rc.local
+ifneq ("$(wildcard $(PATH_TO_FILE))","") 
+ifeq ($(rc_local),) 
+	@sudo echo -e "bash $(rootPath)/gns-boot.sh" >> /etc/rc.local 
+endif 
+else 
+	@sudo echo -e "bash $(rootPath)/gns-boot.sh\nexit 0" > /etc/rc.local \
+		&& chmod +x /etc/rc.local 
+endif	
 
 	@$(ECHO) Install done
 
@@ -72,11 +93,11 @@ clean:
 
 distclean: clean
 
-uninstall:
+uninstall: fakeroot
 	@$(ECHO) Uninstalling Gnomon Server...
 
 	
-	@rm -f $(DESTDIR)$(prefix)/bin/gns \
+	@sudo rm -f $(binPath)/gns \
 		&& rm -rf $(rootPath)
 
 	@$(ECHO) Done
