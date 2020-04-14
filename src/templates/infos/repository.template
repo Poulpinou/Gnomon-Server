@@ -5,6 +5,7 @@ showRepository(){
     local REPOSITORY=$1
     local REPOSITORY_NAME=$(echo "$REPOSITORY" | jq -r '.name')
     local REPOSITORY_GIT_REMOTE=$(echo "$REPOSITORY" | jq -r '.git.remote')
+    local REPOSITORY_BRANCH=$(echo "$REPOSITORY" | jq -r '.git.branch')
 
     if git ls-remote $REPOSITORY_GIT_REMOTE -q &> /dev/null
     then
@@ -20,7 +21,7 @@ showRepository(){
     cat << TEMPLATE
 
     ${s_title}[ ⇅ ${REPOSITORY_NAME} ]${s_normal}
-    ${s_bold}${REPOSITORY_GIT_REMOTE_STATUS} Git Remote : ${s_normal}${REPOSITORY_GIT_REMOTE}
+    ${s_bold}${REPOSITORY_GIT_REMOTE_STATUS} Git Remote : ${s_normal}${REPOSITORY_GIT_REMOTE}:${REPOSITORY_BRANCH}
     ${s_bold}Created at : ${s_normal}${REPOSITORY_CREATED_AT}
     ${s_bold}Last updated at : ${s_normal}${REPOSITORY_UPDATED_AT}
 TEMPLATE

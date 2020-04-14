@@ -9,13 +9,15 @@ getGnomonfile(){
 	if [ -f $path ]
 	then
 		gnomonfile="$path"
+		return 0
 	else
 		gnomonfile=""
 		case $2 in
-			1) exitIfError 1 "$1 is not a Gnomon Repository" ;;
-			2) logWarning "$1 is not a Gnomon Repository"; return 1;;
-			0|*);;
+			1) exitIfError 1 "$1 is not a Gnomon Container" ;;
+			2) logWarning "$1 is not a Gnomon Container" ;;
+			0|*) ;;
 		esac
+		return 1
 	fi 
 }
 

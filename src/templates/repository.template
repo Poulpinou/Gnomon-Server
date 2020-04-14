@@ -16,6 +16,7 @@
 NAME=$1
 REMOTE=$2
 COMMANDS=$3
+BRANCH=$4
 DATE=$(date +'%x %X')
 
 
@@ -45,8 +46,10 @@ repo_template=$(cat <<TEMPLATE
 {
     "name":"${NAME}",
     "creationDate":"${DATE}",
+    "updateDate":"never",
     "git":{
-        "remote":"${REMOTE}"
+        "remote":"${REMOTE}",
+        "branch":"${BRANCH}"
     },
     "commands":${COMMANDS},
     "ports-remap":[

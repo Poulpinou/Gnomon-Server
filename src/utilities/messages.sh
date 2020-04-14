@@ -1,5 +1,11 @@
 #!/bin/sh
 
+getLogFile(){
+        local date=$(date +'%Y_%m_%d')
+        LOG_FILE=$ROOT_PATH/logs/logs_$date
+}
+getLogFile
+
 # Displays an info message
 # - $1 : the message to display
 logInfo(){
@@ -16,13 +22,14 @@ logSuccess(){
 # - $1 : the message to display
 logError(){ 
         echo -e "${s_error}☠ Error : $1 ☠ ${s_normal}"
-        # Todo : Log into file
+        echo -e "[$(date +'%x %X')][$0][ERROR] $1" >>$LOG_FILE
 }
 
 # Displays a warning message
 # - $1 : the message to display
 logWarning(){
         echo -e "${s_warning}⚠ Warning : $1 ⚠ ${s_normal}"
+        echo -e "[$(date +'%x %X')][$0][WARNING] $1" >>$LOG_FILE
 }
 
 # Exits the script and echoes custom error if there is an error
